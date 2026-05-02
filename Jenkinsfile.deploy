@@ -1,0 +1,39 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_REPO = 'azizos07/user-service'
+        SERVICE_NAME = 'user-service'
+        NAMESPACE = 'pedinephro'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh '''
+                    kubectl config use-context kind-pedinephro-cluster
+                    kubectl set image deployment/${SERVICE_NAME} ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest -n ${NAMESPACE}
+                    kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE}
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment pipeline succeeded"
+        }
+        failure {
+            echo "❌ Deployment pipeline failed"
+        }
+    }
+}
