@@ -89,20 +89,6 @@ pipeline {
                 }
             }
         }
-
-        stage('Deploy to Kubernetes') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo "=== Deploying to Kubernetes ==="
-                sh '''
-                    kubectl config use-context kind-pedinephro-cluster
-                    kubectl set image deployment/${SERVICE_NAME} ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest -n pedinephro
-                    kubectl rollout status deployment/${SERVICE_NAME} -n pedinephro
-                '''
-            }
-        }
     }
     post {
         success {
