@@ -16,7 +16,7 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             when {
-                branch 'main'
+                branch 'master'
             }
             steps {
                 sh '''
