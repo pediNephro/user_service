@@ -65,7 +65,7 @@ pipeline {
                     kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
 
                     kubectl set image deployment/${SERVICE_NAME} \
-                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:${BUILD_NUMBER} \
+                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
                         -n ${NAMESPACE}
                 '''
             }
