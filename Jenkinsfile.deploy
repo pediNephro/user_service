@@ -10,7 +10,14 @@ pipeline {
     }
 
     stages {
-
+        stage('Setup kubeconfig') {
+            steps {
+                sh '''
+                    export KUBECONFIG=/var/lib/jenkins/kubeconfig
+                    kubectl get nodes
+                '''
+            }
+        }
         stage('Checkout K8s') {
             steps {
                 git url: 'https://github.com/votre-org/pidev-k8s.git'
@@ -38,7 +45,6 @@ pipeline {
 
         stage('Deploy Kubernetes') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG')]) {
                     sh '''
                         kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
@@ -50,11 +56,10 @@ pipeline {
                     '''
                 }
             }
-        }
+        
 
         stage('Verify Deployment') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG')]) {
                     sh '''
                         kubectl get pods -n ${NAMESPACE}
                         kubectl get svc -n ${NAMESPACE}
@@ -62,6 +67,6 @@ pipeline {
                     '''
                 }
             }
-        }
+        
     }
 }
