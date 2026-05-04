@@ -48,7 +48,7 @@ pipeline {
                     sh '''
                         kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-                        kubectl apply -f k8s/ -n ${NAMESPACE}
+                        kubectl apply -f . -n ${NAMESPACE}
 
                         kubectl set image deployment/${SERVICE_NAME} \
                         ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
