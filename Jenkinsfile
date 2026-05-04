@@ -26,32 +26,39 @@ pipeline {
         }
 
         stage('Start Test MySQL') {
-            steps {
-                sh """
-                    docker run -d \
-                        --name ${MYSQL_CONTAINER} \
-                        -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
-                        -e MYSQL_DATABASE=${MYSQL_DATABASE} \
-                        -p ${MYSQL_PORT}:3306 \
-                        mysql:8 \
-                        --default-authentication-plugin=mysql_native_password
+    steps {
+        sh """
+            docker run -d \
+                --name ${MYSQL_CONTAINER} \
+                -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} \
+                -e MYSQL_DATABASE=${MYSQL_DATABASE} \
+                -e MYSQL_ROOT_HOST='%' \
+                -p ${MYSQL_PORT}:3306 \
+                mysql:8
 
-                    echo "Waiting for MySQL to be ready..."
-                    for i in \$(seq 1 30); do
-                        if docker exec ${MYSQL_CONTAINER} mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD} --silent 2>/dev/null; then
-                            echo "MySQL is ready after \${i} seconds"
-                            break
-                        fi
-                        if [ \$i -eq 30 ]; then
-                            echo "MySQL failed to start in time"
-                            exit 1
-                        fi
-                        echo "Waiting... (\${i}/30)"
-                        sleep 1
-                    done
-                """
-            }
-        }
+            echo "Waiting for MySQL port to be reachable..."
+            for i in \$(seq 1 60); do
+                if docker run --rm --network host mysql:8 mysqladmin ping \
+                    -h 127.0.0.1 \
+                    -P ${MYSQL_PORT} \
+                    -u root \
+                    -p${MYSQL_ROOT_PASSWORD} \
+                    --silent 2>/dev/null; then
+                    echo "MySQL is ready after \${i} seconds"
+                    break
+                fi
+                if [ \$i -eq 60 ]; then
+                    echo "=== MySQL container logs ==="
+                    docker logs ${MYSQL_CONTAINER}
+                    echo "MySQL failed to start in 60 seconds"
+                    exit 1
+                fi
+                echo "Waiting... (\${i}/60)"
+                sleep 2
+            done
+        """
+    }
+}
 
         stage('Unit Tests') {
             steps {
