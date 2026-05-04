@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_HUB_REPO = 'azizos07/user-service'
         SERVICE_NAME = 'user-service'
-        SONAR_HOST = 'http://sonarqube:9000'
+        SONAR_HOST = 'http://172.17.0.2:9000'
         MYSQL_CONTAINER = "test-mysql-${BUILD_NUMBER}"
         MYSQL_PORT = '3307'
         MYSQL_DATABASE = 'testdb'
