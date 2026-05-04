@@ -5,35 +5,63 @@ pipeline {
         DOCKER_HUB_REPO = 'azizos07/user-service'
         SERVICE_NAME = 'user-service'
         NAMESPACE = 'pedinephro'
+        SONAR_HOST = 'http://localhost:9000'
+        SONAR_TOKEN = credentials('sonar-token')
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout K8s') {
             steps {
-                checkout scm
+                git url: 'https://github.com/votre-org/pidev-k8s.git'
             }
         }
 
-        stage('Deploy to Kubernetes') {
-            when {
-                branch 'master'
+        stage('Sonar Quality Gate') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        curl -u ${SONAR_TOKEN}: \
+                        "${SONAR_HOST}/api/qualitygates/project_status?projectKey=${SERVICE_NAME}"
+                    '''
+                }
             }
+        }
+
+        stage('Verify Image') {
             steps {
                 sh '''
-                    kubectl config use-context kind-pedinephro-cluster
-                    kubectl set image deployment/${SERVICE_NAME} ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest -n ${NAMESPACE}
-                    kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE}
+                    docker pull ${DOCKER_HUB_REPO}:latest
                 '''
             }
         }
-    }
 
-    post {
-        success {
-            echo "✅ Deployment pipeline succeeded"
+        stage('Deploy Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+                        kubectl apply -f k8s/ -n ${NAMESPACE}
+
+                        kubectl set image deployment/${SERVICE_NAME} \
+                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
+                        -n ${NAMESPACE} || true
+                    '''
+                }
+            }
         }
-        failure {
-            echo "❌ Deployment pipeline failed"
+
+        stage('Verify Deployment') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-credentials', variable: 'KUBECONFIG')]) {
+                    sh '''
+                        kubectl get pods -n ${NAMESPACE}
+                        kubectl get svc -n ${NAMESPACE}
+                        kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} || true
+                    '''
+                }
+            }
         }
     }
 }

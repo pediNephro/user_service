@@ -2,45 +2,29 @@ pipeline {
     agent any
 
     environment {
-        // Docker Hub Configuration
         DOCKER_HUB_REPO = 'azizos07/user-service'
-        DOCKER_HUB_CREDS = credentials('dockerhub-creds')
-
-        // Build Configuration
-        JAVA_VERSION = '17'
-        MAVEN_VERSION = '3.9.0'
         SERVICE_NAME = 'user-service'
-        SERVICE_PORT = '8081'
+        SONAR_HOST = 'http://localhost:9000'
+        SONAR_TOKEN = credentials('sonar-token')
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo "=== Cloning Repository ==="
                 checkout scm
-                sh 'git log -1 --pretty=format:"%H %s"'
             }
         }
 
         stage('Build') {
             steps {
-                echo "=== Building with Maven ==="
-                sh '''
-                    mvn clean package -DskipTests \
-                        -Dmaven.compiler.source=17 \
-                        -Dmaven.compiler.target=17
-                '''
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('Unit Tests') {
             steps {
-                echo "=== Running Unit Tests ==="
-                sh '''
-                    mvn test \
-                        -Dtest=**/*Test.class \
-                        -Dgroups!="integration"
-                '''
+                sh 'mvn test'
             }
             post {
                 always {
@@ -50,38 +34,33 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            when {
-                branch 'main'
-            }
             steps {
-                echo "=== Code Quality Analysis ==="
-                sh '''
-                    mvn sonar:sonar \
-                        -Dsonar.projectKey=user-service \
-                        -Dsonar.host.url=http://sonarqube:9000 \
-                        -Dsonar.login=${SONAR_TOKEN}
-                '''
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo "=== Building Docker Image ==="
-                script {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        docker build -t ${DOCKER_HUB_REPO}:${BUILD_NUMBER} .
-                        docker tag ${DOCKER_HUB_REPO}:${BUILD_NUMBER} ${DOCKER_HUB_REPO}:latest
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=${SERVICE_NAME} \
+                        -Dsonar.projectName=${SERVICE_NAME} \
+                        -Dsonar.host.url=${SONAR_HOST} \
+                        -Dsonar.login=${SONAR_TOKEN}
                     '''
                 }
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Build Docker Image') {
             steps {
-                echo "=== Pushing Image to Docker Hub ==="
-                script {
+                sh '''
+                    docker build -t ${DOCKER_HUB_REPO}:${BUILD_NUMBER} .
+                    docker tag ${DOCKER_HUB_REPO}:${BUILD_NUMBER} ${DOCKER_HUB_REPO}:latest
+                '''
+            }
+        }
+
+        stage('Push Docker') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh '''
-                        echo $DOCKER_HUB_CREDS_PSW | docker login -u $DOCKER_HUB_CREDS_USR --password-stdin
+                        echo $PASS | docker login -u $USER --password-stdin
                         docker push ${DOCKER_HUB_REPO}:${BUILD_NUMBER}
                         docker push ${DOCKER_HUB_REPO}:latest
                         docker logout
@@ -89,19 +68,13 @@ pipeline {
                 }
             }
         }
-    }
-    post {
-        success {
-            echo "✅ Pipeline SUCCESS"
-            // Send notification
-        }
-        failure {
-            echo "❌ Pipeline FAILED"
-            // Send notification
-        }
-        always {
-            sh 'docker logout'
-            cleanWs()
+
+        stage('Trigger Deploy') {
+            steps {
+                build job: 'user-service-deploy', parameters: [
+                    string(name: 'BUILD_NUMBER', value: "${BUILD_NUMBER}")
+                ]
+            }
         }
     }
 }
