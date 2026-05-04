@@ -3,21 +3,20 @@ pipeline {
 
     environment {
         DOCKER_HUB_REPO = 'azizos07/user-service'
-        SERVICE_NAME = 'user-service'
-        NAMESPACE = 'pedinephro'
-        SONAR_HOST = 'http://localhost:9000'
-        SONAR_TOKEN = credentials('sonar-token')
+        SERVICE_NAME     = 'user-service'
+        NAMESPACE        = 'pedinephro'
+        SONAR_HOST       = 'http://172.17.0.2:9000'
+        KUBECONFIG       = '/var/lib/jenkins/kubeconfig'
     }
 
     stages {
-        stage('Setup kubeconfig') {
+
+        stage('Verify Cluster') {
             steps {
-                sh '''
-                    export KUBECONFIG=/var/lib/jenkins/kubeconfig
-                    kubectl get nodes
-                '''
+                sh 'kubectl get nodes'
             }
         }
+
         stage('Checkout K8s') {
             steps {
                 git url: 'https://github.com/pediNephro/kubernetes-config.git'
@@ -28,8 +27,14 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
-                        curl -u ${SONAR_TOKEN}: \
-                        "${SONAR_HOST}/api/qualitygates/project_status?projectKey=${SERVICE_NAME}"
+                        STATUS=$(curl -s -u ${SONAR_TOKEN}: \
+                            "${SONAR_HOST}/api/qualitygates/project_status?projectKey=${SERVICE_NAME}" \
+                            | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+                        echo "Quality Gate Status: $STATUS"
+                        if [ "$STATUS" != "OK" ]; then
+                            echo "Quality Gate FAILED — blocking deployment"
+                            exit 1
+                        fi
                     '''
                 }
             }
@@ -37,24 +42,22 @@ pipeline {
 
         stage('Verify Image') {
             steps {
-                sh '''
-                    docker pull ${DOCKER_HUB_REPO}:latest
-                '''
+                sh 'docker pull ${DOCKER_HUB_REPO}:latest'
             }
         }
 
-       stage('Deploy Infrastructure') {
+        stage('Deploy Infrastructure') {
             steps {
                 sh '''
-                    # Apply foundational resources in order (only if changed)
                     kubectl apply -f 00-namespace.yaml
-                    kubectl apply -f 01-secrets.yaml
-                    kubectl apply -f 02-configmap.yaml
-                    kubectl apply -f 03-mysql.yaml
-                    kubectl apply -f 04-eureka.yaml
-                    kubectl apply -f 05-gateway.yaml
-                    kubectl apply -f 06-keycloak.yaml
-                    kubectl apply -f 12-ingress.yaml
+                    kubectl apply -f 01-secrets.yaml   -n ${NAMESPACE}
+                    kubectl apply -f 02-configmap.yaml -n ${NAMESPACE}
+                    kubectl apply -f 03-mysql.yaml     -n ${NAMESPACE}
+                    kubectl rollout status deployment/mysql -n ${NAMESPACE} --timeout=120s
+                    kubectl apply -f 04-eureka.yaml    -n ${NAMESPACE}
+                    kubectl apply -f 05-gateway.yaml   -n ${NAMESPACE}
+                    kubectl apply -f 06-keycloak.yaml  -n ${NAMESPACE}
+                    kubectl apply -f 12-ingress.yaml   -n ${NAMESPACE}
                 '''
             }
         }
@@ -63,24 +66,32 @@ pipeline {
             steps {
                 sh '''
                     kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
-
                     kubectl set image deployment/${SERVICE_NAME} \
                         ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
                         -n ${NAMESPACE}
                 '''
             }
         }
-        
 
         stage('Verify Deployment') {
             steps {
-                    sh '''
-                        kubectl get pods -n ${NAMESPACE}
-                        kubectl get svc -n ${NAMESPACE}
-                        kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} || true
-                    '''
-                }
+                sh '''
+                    kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} --timeout=120s
+                    echo "=== Pods ==="
+                    kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
+                    echo "=== Services ==="
+                    kubectl get svc -n ${NAMESPACE}
+                '''
             }
-        
+        }
+    }
+
+    post {
+        failure {
+            sh 'kubectl rollout undo deployment/${SERVICE_NAME} -n ${NAMESPACE} || true'
+        }
+        success {
+            echo "Deployed ${SERVICE_NAME}:latest successfully"
+        }
     }
 }
