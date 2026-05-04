@@ -43,19 +43,33 @@ pipeline {
             }
         }
 
-        stage('Deploy Kubernetes') {
+       stage('Deploy Infrastructure') {
             steps {
-                    sh '''
-                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-                        kubectl apply -f . -n ${NAMESPACE}
-
-                        kubectl set image deployment/${SERVICE_NAME} \
-                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
-                        -n ${NAMESPACE} || true
-                    '''
-                }
+                sh '''
+                    # Apply foundational resources in order (only if changed)
+                    kubectl apply -f 00-namespace.yaml
+                    kubectl apply -f 01-secrets.yaml
+                    kubectl apply -f 02-configmap.yaml
+                    kubectl apply -f 03-mysql.yaml
+                    kubectl apply -f 04-eureka.yaml
+                    kubectl apply -f 05-gateway.yaml
+                    kubectl apply -f 06-keycloak.yaml
+                    kubectl apply -f 12-ingress.yaml
+                '''
             }
+        }
+
+        stage('Deploy User Service') {
+            steps {
+                sh '''
+                    kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
+
+                    kubectl set image deployment/${SERVICE_NAME} \
+                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:${BUILD_NUMBER} \
+                        -n ${NAMESPACE}
+                '''
+            }
+        }
         
 
         stage('Verify Deployment') {
