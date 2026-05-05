@@ -21,7 +21,7 @@ pipeline {
             steps {
                 cleanWs()
                 git url: 'https://github.com/pediNephro/kubernetes-config.git',
-                branch : 'master'
+                    branch: 'master'
             }
         }
 
@@ -35,7 +35,6 @@ pipeline {
                         echo "Quality Gate Status: $STATUS"
                         if [ "$STATUS" != "OK" ]; then
                             echo "Quality Gate FAILED — continue deployment"
-                            
                         fi
                     '''
                 }
@@ -68,36 +67,40 @@ pipeline {
             steps {
                 sh '''
                     echo "=== File being applied ==="
-            cat 07-user-service.yaml
-            echo "=== Checking for tcpSocket ==="
-            grep -n tcpSocket 07-user-service.yaml && echo "FOUND BUG" || echo "File is clean"
-            kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
+                    cat 07-user-service.yaml
+                    echo "=== Checking for tcpSocket ==="
+                    grep -n tcpSocket 07-user-service.yaml && echo "FOUND BUG" || echo "File is clean"
+                    kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
                 '''
             }
         }
 
         stage('Verify Deployment') {
-    steps {
-        sh '''
-            kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} --timeout=300s
-            echo "=== Pods ==="
-            kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
-            echo "=== Services ==="
-            kubectl get svc -n ${NAMESPACE}
-        '''
-    }
-}
+            steps {
+                sh '''
+                    kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} --timeout=300s
+                    echo "=== Pods ==="
+                    kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
+                    echo "=== Services ==="
+                    kubectl get svc -n ${NAMESPACE}
+                '''
+            }
+        }
     }
 
     post {
         failure {
-echo "=== Deployment failed — keeping pods alive for investigation ==="
+            // ⛔ rollout undo removed — leaving pods alive for debugging
+            sh '''
+                echo "=== Deployment failed — keeping pods alive for investigation ==="
                 echo "=== Pod status ==="
                 kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
                 echo "=== Failing pod logs ==="
                 kubectl logs -n ${NAMESPACE} -l app=${SERVICE_NAME} --tail=50
                 echo "=== Pod describe ==="
-                kubectl describe pods -n ${NAMESPACE} -l app=${SERVICE_NAME}        }
+                kubectl describe pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
+            '''
+        }
         success {
             echo "Deployed ${SERVICE_NAME}:latest successfully"
         }
