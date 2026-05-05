@@ -69,12 +69,7 @@ public class SecurityConfig {
     }
 
     /**
-     * ✅ Completely ignore actuator from security filters (BEST for Kubernetes)
-     */
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return web -> web.ignoring().requestMatchers("/actuator/**");
-    }
+
 
     /**
      * ✅ JWT decoder (Keycloak)
