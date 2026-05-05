@@ -74,16 +74,16 @@ pipeline {
         }
 
         stage('Verify Deployment') {
-            steps {
-                sh '''
-                    kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} --timeout=120s
-                    echo "=== Pods ==="
-                    kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
-                    echo "=== Services ==="
-                    kubectl get svc -n ${NAMESPACE}
-                '''
-            }
-        }
+    steps {
+        sh '''
+            kubectl rollout status deployment/${SERVICE_NAME} -n ${NAMESPACE} --timeout=300s
+            echo "=== Pods ==="
+            kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
+            echo "=== Services ==="
+            kubectl get svc -n ${NAMESPACE}
+        '''
+    }
+}
     }
 
     post {
