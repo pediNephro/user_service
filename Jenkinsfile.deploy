@@ -65,13 +65,15 @@ pipeline {
 
         stage('Deploy User Service') {
             steps {
-                sh '''
-                    echo "=== File being applied ==="
-                    cat 07-user-service.yaml
-                    echo "=== Checking for tcpSocket ==="
-                    grep -n tcpSocket 07-user-service.yaml && echo "FOUND BUG" || echo "File is clean"
-                    kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
-                '''
+                  sh '''
+            echo "=== File being applied ==="
+            cat 07-user-service.yaml
+            echo "=== Checking for tcpSocket ==="
+            grep -n tcpSocket 07-user-service.yaml && echo "FOUND BUG" || echo "File is clean"
+
+            echo "=== Force replacing deployment to clear old probe config ==="
+            kubectl replace --force -f 07-user-service.yaml -n ${NAMESPACE}
+        '''
             }
         }
 
