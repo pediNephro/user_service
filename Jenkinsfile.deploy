@@ -91,8 +91,13 @@ pipeline {
 
     post {
         failure {
-            sh 'kubectl rollout undo deployment/${SERVICE_NAME} -n ${NAMESPACE} || true'
-        }
+echo "=== Deployment failed — keeping pods alive for investigation ==="
+                echo "=== Pod status ==="
+                kubectl get pods -n ${NAMESPACE} -l app=${SERVICE_NAME}
+                echo "=== Failing pod logs ==="
+                kubectl logs -n ${NAMESPACE} -l app=${SERVICE_NAME} --tail=50
+                echo "=== Pod describe ==="
+                kubectl describe pods -n ${NAMESPACE} -l app=${SERVICE_NAME}        }
         success {
             echo "Deployed ${SERVICE_NAME}:latest successfully"
         }
