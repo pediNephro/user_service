@@ -19,7 +19,8 @@ pipeline {
 
         stage('Checkout K8s') {
             steps {
-                git url: 'https://github.com/pediNephro/kubernetes-config.git'
+                git url: 'https://github.com/pediNephro/kubernetes-config.git',
+                branch : 'master'
             }
         }
 
