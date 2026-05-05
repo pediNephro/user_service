@@ -19,6 +19,7 @@ pipeline {
 
         stage('Checkout K8s') {
             steps {
+                cleanWs()
                 git url: 'https://github.com/pediNephro/kubernetes-config.git',
                 branch : 'master'
             }
@@ -66,10 +67,11 @@ pipeline {
         stage('Deploy User Service') {
             steps {
                 sh '''
-                    kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
-                    kubectl set image deployment/${SERVICE_NAME} \
-                        ${SERVICE_NAME}=${DOCKER_HUB_REPO}:latest \
-                        -n ${NAMESPACE}
+                    echo "=== File being applied ==="
+            cat 07-user-service.yaml
+            echo "=== Checking for tcpSocket ==="
+            grep -n tcpSocket 07-user-service.yaml && echo "FOUND BUG" || echo "File is clean"
+            kubectl apply -f 07-user-service.yaml -n ${NAMESPACE}
                 '''
             }
         }
